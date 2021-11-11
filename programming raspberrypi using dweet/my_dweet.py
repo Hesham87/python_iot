@@ -66,7 +66,7 @@ def sendDweet(ID, stateJson):
 		logger.info('dweet request result = %s', req.json())
 		return req.json()
 	else:
-		logger.error('dweet request failure : %S', req.status_code)
+		logger.error('dweet request failure : %s', req.status_code)
 		return {}
 
 # receving dweet
