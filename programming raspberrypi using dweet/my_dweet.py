@@ -5,12 +5,14 @@ import logging
 import json
 import os
 import sys
+import threading
 from time import sleep
 from uuid import uuid1
 
 # Global variables
 BUTTON_GPIO = 23
 LED_GPIO = 21
+is_blinking = False
 pi = pigpio.pi()
 dweetFile = 'dweet_name.txt'
 dweetURL = 'https://dweet.io'
@@ -57,11 +59,11 @@ def dweetID():
 # Sending dweet
 def sendDweet(ID, stateJson):
 	URL = dweetURL + '/dweet/for/' + ID
-	logger.debug('dweet url = ' + URL + 'json state = %S', stateJson)
+	logger.info('dweet url = ' + URL + 'json state = %s', stateJson)
 	req = requests.get(URL, params=stateJson)
 	
 	if req.status_code == 200:
-		logger.debug('dweet request result = %s', req.json())
+		logger.info('dweet request result = %s', req.json())
 		return req.json()
 	else:
 		logger.error('dweet request failure : %S', req.status_code)
@@ -106,6 +108,7 @@ def pressed(gpio_pin, level, tick):
 # Processing dweet
 def processDweet( dweet):
 	global state
+	global is_blinking
 	if not 'state' in dweet:
 		return None
 
@@ -113,6 +116,8 @@ def processDweet( dweet):
 
 	if dweetState == state:                                               
 		return None  # State not changed
+
+	is_blinking = False
 
 	if dweetState == stateON:                                                          
 		pi.write(LED_GPIO, 1)
@@ -139,8 +144,25 @@ def signal_handler(sig, frame):
 	pi.write(LED_GPIO, 0)
 	sys.exit(0)
 
+
 def blink():
-	pi.write(LED_GPIO, 0)
+	global is_blinking
+
+	is_blinking = True
+
+	def do_blink():
+		while is_blinking:
+			pi.write(LED_GPIO, 1)
+			sleep(1)
+			pi.write(LED_GPIO, 0)
+			sleep(1)
+
+	# daemon=True prevents our thread below from preventing the main thread
+	# (essentially the code in if __name__ == '__main__') from exiting naturally
+	# when it reaches it's end. If you try daemon=False you will discover that the
+	# program never quits back to the Terminal and appears to hang after the LED turns off.
+	thread = threading.Thread(name='LED on GPIO ' + str(LED_GPIO), target=do_blink, daemon=True)
+	thread.start()
 
 	
 # Main entry point
